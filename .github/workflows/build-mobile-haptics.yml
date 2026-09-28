@@ -33,7 +33,7 @@ jobs:
       - name: Set up Android SDK
         uses: android-actions/setup-android@v4
         with:
-          packages: ''
+          packages: 'platform-tools'
 
       - name: Install Android NDK
         run: sdkmanager "ndk;${NDK_VERSION}"
@@ -41,9 +41,10 @@ jobs:
       - name: Extract source
         shell: bash
         run: |
-          set -e
+          set -euo pipefail
           rm -rf project
-          mkdir project
+          mkdir -p project
+          unzip -t mobile-haptics-source.zip
           unzip -q mobile-haptics-source.zip -d project
 
       - name: Build native Android bridge
@@ -53,24 +54,37 @@ jobs:
           set -euo pipefail
 
           NDK="$ANDROID_SDK_ROOT/ndk/${NDK_VERSION}"
-          CLANG="$NDK/toolchains/llvm/prebuilt/linux-x86_64/bin/clang"
 
-          test -x "$CLANG"
+          test -x "$NDK/ndk-build"
+
+          cd src/main/cpp
+
+          "$NDK/ndk-build"             NDK_PROJECT_PATH=.             NDK_APPLICATION_MK=Application.mk
+
+          cd ../../..
 
           mkdir -p src/main/resources/native/arm64-v8a
+          mkdir -p src/main/resources/native/armeabi-v7a
+          mkdir -p src/main/resources/native/x86
           mkdir -p src/main/resources/native/x86_64
 
-          "$CLANG" \
-            --target=aarch64-linux-android24 \
-            -shared -fPIC -O2 \
-            src/main/cpp/mobilehaptics.c \
-            -o src/main/resources/native/arm64-v8a/libmobilehaptics.so
+          cp src/main/cpp/libs/arm64-v8a/libmobilevibration.so             src/main/resources/native/arm64-v8a/libmobilevibration.so
 
-          "$CLANG" \
-            --target=x86_64-linux-android24 \
-            -shared -fPIC -O2 \
-            src/main/cpp/mobilehaptics.c \
-            -o src/main/resources/native/x86_64/libmobilehaptics.so
+          cp src/main/cpp/libs/armeabi-v7a/libmobilevibration.so             src/main/resources/native/armeabi-v7a/libmobilevibration.so
+
+          cp src/main/cpp/libs/x86/libmobilevibration.so             src/main/resources/native/x86/libmobilevibration.so
+
+          cp src/main/cpp/libs/x86_64/libmobilevibration.so             src/main/resources/native/x86_64/libmobilevibration.so
+
+      - name: Check native libraries
+        working-directory: project
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s src/main/resources/native/arm64-v8a/libmobilevibration.so
+          test -s src/main/resources/native/x86_64/libmobilevibration.so
+          test -s src/main/resources/native/armeabi-v7a/libmobilevibration.so
+          test -s src/main/resources/native/x86/libmobilevibration.so
 
       - name: Build mod
         working-directory: project
